@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flaky-hunt"
+version = "0.1.0"
+description = "Find flaky pytest tests and the one factor that makes each of them fail"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = ["pytest>=7.4", "time-machine>=2.13"]
+classifiers = ["Framework :: Pytest", "Topic :: Software Development :: Testing"]
+
+[project.optional-dependencies]
+dev = ["ruff>=0.6"]
+
+[project.scripts]
+flaky-hunt = "flaky_hunt.cli:main"
+
+[project.entry-points.pytest11]
+flaky_hunt = "flaky_hunt.plugin"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: runs whole hunts; minutes rather than seconds"]
+addopts = "-p pytester"
+
+[tool.ruff]
+line-length = 100
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["B023"]

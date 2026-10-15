@@ -1,0 +1,11 @@
+{
+  "tests/test_cache.py::test_init_cache_creates_price_file": {"factor": "environment", "trigger": "second run in the same TMPDIR"},
+  "tests/test_cart.py::test_checkout_hides_debug_details": {"factor": "order", "culprit": "tests/test_settings.py::test_enable_debug_mode"},
+  "tests/test_coupons.py::test_short_coupon_expires_today": {"factor": "time", "trigger": "just before"},
+  "tests/test_inventory.py::test_parallel_reservations_use_all_stock": {"factor": "timing", "trigger": "threads switch every microsecond"},
+  "tests/test_rates.py::test_price_index_reachable": {"factor": "network", "trigger": "network blocked"},
+  "tests/test_receipts.py::test_receipt_epoch": {"factor": "timezone", "trigger": "TZ="},
+  "tests/test_reports.py::test_nightly_report_is_fast": {"factor": "timing", "trigger": "slower machine"},
+  "tests/test_shipping.py::test_bulk_discount": {"factor": "random", "trigger": "random seeded with"},
+  "tests/test_tags.py::test_render_tags": {"factor": "random", "trigger": "PYTHONHASHSEED="}
+}
