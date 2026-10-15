@@ -15,6 +15,7 @@ MUTANTS = {
     "tz-dropped": "the TZ setting never reaches the test process",
     "no-confirm": "a single failure under a setting is taken as the cause, without re-running",
     "wald-interval": "failure-rate intervals use the textbook formula",
+    "sequential-sides": "a comparison runs all of one side, then all of the other",
 }
 
 

@@ -113,3 +113,31 @@ def test_second_stage_confirms_it():
     assert (d.test, d.factor) == ("t::race", "timing")
     assert (d.failing.fails, d.failing.runs) == (32, 32)
     assert d.passing.runs == 32 and 8 <= d.passing.fails <= 16
+
+
+class Drifting:
+    """t::drift ignores every setting: it fails during a busy spell, the
+    first 8 single-test runs, and passes after. Its probe runs fail only
+    under one random seed, by chance, so the seed knob is a suspect."""
+
+    def __init__(self):
+        self.suite_runs = self.single_runs = 0
+        self.seconds = 0.0
+
+    def collect(self):
+        return ["t::drift"]
+
+    def run(self, setting: Setting, nodeids=None, order=None):
+        if nodeids is None:
+            self.suite_runs += 1
+            failed = setting.label == "random seeded with 1"
+        else:
+            self.single_runs += 1
+            failed = self.single_runs <= 8
+        return {"t::drift": Outcome("failed" if failed else "passed", "busy")}
+
+
+def test_drift_over_time_is_not_blamed_on_a_setting():
+    probes = [p for p in default_probes({}) if p.knob == "seed"]
+    r = Hunt(Drifting(), probes, confirm=8, confirm_max=32, workers=1).run()
+    assert r.diagnoses == [] and "t::drift" in r.unexplained

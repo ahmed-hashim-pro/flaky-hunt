@@ -18,6 +18,7 @@ AIMED = {
     "tz-dropped": ["tests/test_planted.py::test_timezone"],
     "no-confirm": ["tests/test_planted.py::test_noise_not_blamed"],
     "wald-interval": ["tests/test_stats.py"],
+    "sequential-sides": ["tests/test_hunt_logic.py"],
 }
 
 survived = 0

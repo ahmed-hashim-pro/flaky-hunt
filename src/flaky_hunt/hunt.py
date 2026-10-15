@@ -226,9 +226,7 @@ class Hunt:
             while len(runs) < n:
                 runs.append(self.runner.run(s, nodeids=[*prefix, t]).get(t))
             runs = runs[:n]
-        fails = [o for o in runs if o is not None and o.failed]
-        skipped = sum(o is not None and o.outcome == "skipped" for o in runs)
-        return Rate(len(fails), n, skipped), (fails[0].message if fails else "")
+        return _tally(runs)
 
     def _compare(
         self,
@@ -237,6 +235,13 @@ class Hunt:
         better: tuple[Setting, tuple[str, ...]],
     ) -> tuple[Rate, Rate, float, str] | None:
         """Does `t` fail significantly more often under `worse` than under `better`?
+
+        The two sides are run alternately, one of each at a time, and fresh
+        for every comparison. A test's failure rate can drift with the load
+        on the machine (other runs of the hunt start and stop), and running
+        all of one side and then all of the other turns that drift into a
+        difference between the sides: a race was once "confirmed" as
+        seed-dependent that way, 13 of 32 against 1 of 32.
 
         Two stages: n runs a side, then, if that was inconclusive but leaning
         that way (p < 0.25), up to n_max a side. The second stage is for tests
@@ -251,15 +256,25 @@ class Hunt:
         """
         stages = [self.n] if self.n_max == self.n else [self.n, self.n_max]
         level = self.alpha / (len(stages) * max(1, self._tries.get(t, 1)))
+        a: list[Outcome | None] = []
+        b: list[Outcome | None] = []
         for n in stages:
-            bad, message = self._rate(t, *worse, n=n)
-            good, _ = self._rate(t, *better, n=n)
+            if mutants.active("sequential-sides"):
+                a += [self._once(t, *worse) for _ in range(n - len(a))]
+                b += [self._once(t, *better) for _ in range(n - len(b))]
+            while len(a) < n:
+                a.append(self._once(t, *worse))
+                b.append(self._once(t, *better))
+            (bad, message), (good, _) = _tally(a), _tally(b)
             p = fisher_greater(bad.fails, bad.runs, good.fails, good.runs)
             if p < level:
                 return bad, good, p, message
             if p >= PROMISING:
                 return None
         return None
+
+    def _once(self, t: str, s: Setting, prefix: tuple[str, ...]) -> Outcome | None:
+        return self.runner.run(s, nodeids=[*prefix, t]).get(t)
 
     def _confirm(
         self, t: str, factor: str, s_fail: Setting, s_pass: Setting, message: str
@@ -359,11 +374,19 @@ def narrow(before: list[str], breaks: Callable[[list[str]], bool]) -> str | None
     return None
 
 
+def _tally(runs: list[Outcome | None]) -> tuple[Rate, str]:
+    fails = [o for o in runs if o is not None and o.failed]
+    skipped = sum(o is not None and o.outcome == "skipped" for o in runs)
+    return Rate(len(fails), len(runs), skipped), (fails[0].message if fails else "")
+
+
 def _dedupe(found: list[Diagnosis]) -> list[Diagnosis]:
-    seen: set[tuple[str, str]] = set()
-    out = []
+    """One diagnosis per test and factor: when two knobs of a factor both
+    hold (frequent switches and a competing thread both break a race), the
+    one with the strongest evidence, whichever finished first."""
+    best: dict[tuple[str, str], Diagnosis] = {}
     for d in found:
-        if (d.test, d.factor) not in seen:
-            seen.add((d.test, d.factor))
-            out.append(d)
-    return out
+        key = (d.test, d.factor)
+        if key not in best or d.p_value < best[key].p_value:
+            best[key] = d
+    return list(best.values())
