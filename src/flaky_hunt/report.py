@@ -24,9 +24,8 @@ def render(report: Report, factors: list[str]) -> str:
     if report.always_fail:
         head += f", {len(report.always_fail)} failing in every run"
     out.append(head)
-    single = report.runs - report.suite_runs
     out.append(
-        f"{report.suite_runs} runs of the suite and {single} of single tests "
+        f"{report.suite_runs} runs of the suite and {report.single_runs} of single tests "
         f"in {_duration(report.seconds)}"
     )
 

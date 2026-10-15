@@ -1,0 +1,40 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.10", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install -e '.[dev]'
+      - run: ruff check src tests scripts examples && ruff format --check src tests scripts examples
+      - run: pytest -q -m "not slow"
+
+  hunt:
+    # Whole hunts of the planted suite: every planted cause must be found,
+    # nothing else blamed, and every deliberately broken flaky-hunt caught.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e '.[dev]'
+      - run: pytest -q -m slow
+      - run: python scripts/mutants.py
+      - name: the README quickstart
+        working-directory: examples/planted
+        run: |
+          set +e
+          flaky-hunt run --json report.json
+          test $? -eq 1
+          python -c "import json; r = json.load(open('report.json')); assert len(r['flaky']) == 9, r['flaky']"

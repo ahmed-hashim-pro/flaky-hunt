@@ -46,8 +46,9 @@ class Runner:
         self.opts = pytest_opts
         self.workdir = workdir
         self.timeout = timeout
-        self.runs = 0
-        self.seconds = 0.0
+        self.suite_runs = 0  # runs of the whole suite (in any order)
+        self.single_runs = 0  # runs of chosen tests
+        self.seconds = 0.0  # summed over pytest processes
         self._lock = threading.Lock()
         self._n = 0
         self._shared_tmp = workdir / "shared-tmp"
@@ -111,6 +112,11 @@ class Runner:
                 f"pytest wrote no results under {setting.label!r}; "
                 f"its output is in {scratch / 'output.txt'}"
             )
+        with self._lock:
+            if nodeids is None:
+                self.suite_runs += 1
+            else:
+                self.single_runs += 1
         data = json.loads(report.read_text())
         return {k: Outcome(v["outcome"], v["message"]) for k, v in data.items()}
 
@@ -157,7 +163,6 @@ class Runner:
             except subprocess.TimeoutExpired:
                 out.write(f"\nflaky-hunt: timed out after {self.timeout:.0f} s\n".encode())
         with self._lock:
-            self.runs += 1
             self.seconds += time.monotonic() - start
 
 

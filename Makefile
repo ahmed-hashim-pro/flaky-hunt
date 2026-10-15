@@ -28,4 +28,4 @@ docker-check: image
 
 gif: image
 	docker build -f docs/demo.Dockerfile -t flaky-hunt-vhs:dev .
-	docker run --rm -v $(CURDIR)/docs:/out flaky-hunt-vhs:dev /src/docs/demo.tape
+	docker run --rm -v $(CURDIR):/vhs -w /vhs flaky-hunt-vhs:dev docs/demo.tape

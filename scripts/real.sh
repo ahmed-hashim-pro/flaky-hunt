@@ -9,12 +9,14 @@ WORKERS=${WORKERS:-3}
 hunt() {  # name repo tag install-command [test paths]
   local name=$1 repo=$2 tag=$3 install=$4 paths=${5:-}
   echo "== $name $tag" >&2
-  docker run --rm -v "$PWD":/fh:ro -v "$PWD/docs/real":/out python:3.12-slim bash -c "
+  docker run --rm -e WORKERS -v "$PWD":/fh:ro -v "$PWD/docs/real":/out python:3.12-slim bash -c "
     set -e
+    export DEBIAN_FRONTEND=noninteractive PIP_ROOT_USER_ACTION=ignore PIP_DISABLE_PIP_VERSION_CHECK=1
     apt-get update -qq && apt-get install -y -qq git >/dev/null
-    pip install -q /fh 2>&1 | grep -v 'root user' || true
+    cp -r /fh /tmp/fh && rm -rf /tmp/fh/src/*.egg-info && pip install -q /tmp/fh
+    command -v flaky-hunt >/dev/null
     git clone -q --depth 1 -b $tag $repo /p && cd /p
-    $install 2>&1 | grep -v 'root user' || true
+    $install
     start=\$(date +%s)
     flaky-hunt run --workers $WORKERS --json /out/$name.json $paths > /out/$name.txt || true
     echo \"wall time: \$(( \$(date +%s) - start )) s on $WORKERS workers ($(nproc) cores)\" >> /out/$name.txt

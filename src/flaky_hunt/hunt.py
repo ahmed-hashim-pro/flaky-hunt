@@ -63,7 +63,7 @@ class Report:
     unexplained: dict[str, Rate] = field(default_factory=dict)
     always_fail: list[str] = field(default_factory=list)
     suite_runs: int = 0
-    runs: int = 0
+    single_runs: int = 0
     seconds: float = 0.0
     run_seconds: float = 0.0
 
@@ -109,7 +109,6 @@ class Hunt:
             jobs.append((s, shuffled(ids, s.order) if s.order else None))
         self.say(f"probing: {len(jobs)} runs of the whole suite")
         results = self._map(lambda j: (j[0], j[1], self.runner.run(j[0], order=j[1])), jobs)
-        report.suite_runs = len(results)
         control = [r for s, _, r in results if s is CONTROL]
         probes = [(s, o, r) for s, o, r in results if s is not CONTROL]
 
@@ -145,7 +144,8 @@ class Hunt:
                 runs = sum(t in r for _, _, r in probes) + sum(t in r for r in control)
                 report.unexplained[t] = Rate(fails, runs)
 
-        report.runs = self.runner.runs
+        report.suite_runs = self.runner.suite_runs
+        report.single_runs = self.runner.single_runs
         report.run_seconds = self.runner.seconds
         report.seconds = time.monotonic() - start
         return report
