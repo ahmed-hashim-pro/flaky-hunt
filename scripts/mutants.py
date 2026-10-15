@@ -22,7 +22,7 @@ AIMED = {
 }
 
 survived = 0
-print(f"{'mutant':<15} {'result':<8} {'time':>6}  what it breaks")
+print(f"{'mutant':<17} {'result':<8} {'time':>6}  what it breaks")
 for name, what in MUTANTS.items():
     start = time.monotonic()
     env = {**os.environ, "FLAKY_HUNT_MUTANT": name}
@@ -35,5 +35,5 @@ for name, what in MUTANTS.items():
     caught = r.returncode != 0
     survived += not caught
     took = time.monotonic() - start
-    print(f"{name:<15} {'caught' if caught else 'MISSED':<8} {took:>5.0f}s  {what}")
+    print(f"{name:<17} {'caught' if caught else 'MISSED':<8} {took:>5.0f}s  {what}")
 sys.exit(1 if survived else 0)

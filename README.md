@@ -19,7 +19,7 @@ afternoon of rerunning and guessing.
 ```
 $ flaky-hunt run
 flaky-hunt: 16 tests, 9 flaky (9 with a cause found)
-39 runs of the suite and 314 of single tests in 1m 34s
+39 runs of the suite and 441 of single tests in 1m 10s
 
 tests/test_cart.py::test_checkout_hides_debug_details
   order        after tests/test_settings.py::test_enable_debug_mode  fails 8/8  (68%–100%)
@@ -78,7 +78,7 @@ pip install -e '.[dev]'
 
 cd examples/planted
 pytest -q                         # usually passes, or fails one or two tests
-flaky-hunt run                    # about 1.5 minutes; exits 1 because it finds 9
+flaky-hunt run                    # a minute or two; exits 1 because it finds 9
 flaky-hunt run --factors order    # only one factor
 flaky-hunt factors                # every setting it tries
 ```
@@ -92,7 +92,7 @@ flaky-hunt run --pytest-args "-m 'not integration'" --workers 8
 ```
 
 `make test` runs the fast self-tests (seconds), `make check` adds whole
-hunts of the planted suite (about 3 minutes), `make mutants` runs the
+hunts of the planted suite (a few minutes), `make mutants` runs the
 self-tests against deliberately broken versions of flaky-hunt, and
 `make real` repeats the real-project runs above in Docker.
 
@@ -105,7 +105,9 @@ self-tests against deliberately broken versions of flaky-hunt, and
    under another (seed 5 and seed 1, `TZ=Pacific/Kiritimati` and
    `TZ=UTC`), or under a setting and as-is, is a suspect for that knob.
 3. **Confirm.** Run the test on its own, in 8 fresh processes under the
-   failing setting and 8 under the passing one. The knob is reported only
+   failing setting and 8 under the passing one, alternating between the
+   two so that a change in the machine's load hits both sides alike. The
+   knob is reported only
    if the failing side fails significantly more often (one-sided Fisher
    exact test). This is what stops a test that fails at random from being
    blamed on whichever setting it happened to fail under: the hash-order
@@ -113,9 +115,9 @@ self-tests against deliberately broken versions of flaky-hunt, and
    survives.
    - If 8 a side is inconclusive but leaning that way (p < 0.25), both
      sides go to 32 runs. That is for tests that also fail now and then
-     as-is: on a busy machine the planted race fails as-is in up to a fifth
-     of runs, and 8 of 8 against 3 of 8 proves nothing, while 32 of 32
-     against 10 of 32 does.
+     as-is: on GitHub's runners the planted race fails as-is in a fifth to
+     a half of runs, and 8 of 8 against 3 of 8 proves nothing, while 32 of
+     32 against 10 of 32 does.
    - The 1% significance level is split over the two stages and over every
      cause tried for that test (Bonferroni), so for each test the chance of
      blaming any cause that isn't there stays under 1%. A test that fails at
@@ -171,23 +173,53 @@ cause found, nothing blamed on anything else, no stable test reported.
 Two of these (the timing budget and the receipt) pass every time as-is on
 a typical machine in UTC: they are flaky across machines, not across runs,
 which is exactly how they reach CI unnoticed. The race is both: as-is it
-fails in about 1 run in 16 on an idle 4-CPU box and 1 in 6 on a loaded
-one, and every time with frequent thread switches.
+fails in about 1 run in 16 on an idle 4-CPU box, in up to half of runs on
+a GitHub runner, and nearly every time with frequent thread switches.
 
-To show those tests can fail, `scripts/mutants.py` runs them against five
+To show those tests can fail, `scripts/mutants.py` runs them against six
 deliberately broken versions of flaky-hunt. Every one is caught:
 
 ```
-mutant          result     time  what it breaks
-blame-last      caught      16s  the polluter search names the test that ran just before the victim
-shared-tmpdir   caught      19s  every run shares one TMPDIR, so files leak between runs
-tz-dropped      caught       5s  the TZ setting never reaches the test process
-no-confirm      caught      14s  a single failure under a setting is taken as the cause, without re-running
-wald-interval   caught       0s  failure-rate intervals use the textbook formula
+mutant            result     time  what it breaks
+blame-last        caught       9s  the polluter search names the test that ran just before the victim
+shared-tmpdir     caught      25s  every run shares one TMPDIR, so files leak between runs
+tz-dropped        caught       5s  the TZ setting never reaches the test process
+no-confirm        caught       9s  a single failure under a setting is taken as the cause, without re-running
+wald-interval     caught       0s  failure-rate intervals use the textbook formula
+sequential-sides  caught       0s  a comparison runs all of one side, then all of the other
 ```
 
 `no-confirm` is the interesting one: without the confirmation step, the
 hash-order test is also blamed on the time zone and on thread timing.
+
+### How reliable the diagnosis is
+
+Whole hunts of the planted suite, each scored against `expected.json`
+(`scripts/reliability.py`; nine causes, nothing else blamed):
+
+| Where | Version | Hunts exactly right |
+| --- | --- | ---: |
+| 4 CPUs plus 4 busy loops | first release: 8 runs a side, one stage | 8 of 12 |
+| 4 CPUs plus 4 busy loops | now | 10 of 10 |
+| 2 CPUs | now | 10 of 10 |
+| GitHub runner (`hunt` job, every push) | now | 10 of 10 |
+
+The first release failed in CI in exactly the way the first row shows.
+On a busy runner the planted race also fails as-is in up to half of runs,
+so 8 runs a side couldn't separate "always fails with frequent thread
+switches" from "fails now and then anyway"; a test that fails at random,
+compared under a dozen knobs, now and then had one come out significant
+by chance; and running one side after the other let a change in load
+between the two look like an effect (a seed was once "confirmed" as the
+race's cause, 13 of 32 against 1 of 32). The fixes are the second stage,
+the split significance level and the alternating sides described under
+[How it works](#how-it-works), plus a planted race long enough that
+frequent switches break it nearly every time even on a starved machine.
+30 of 30 since then is a 95% interval of 89–100%: good, not proven
+perfect. The price is time: comparisons no longer share runs, so a hunt does
+more of them. The planted suite takes about a minute on an ordinary
+12-core machine, and 3–9 minutes in the starved containers above (it was
+1.5–3 there before).
 
 The bisection is tested separately against an oracle with the culprit at
 every position in lists of 1 to 333 tests, and each plugin option has a
