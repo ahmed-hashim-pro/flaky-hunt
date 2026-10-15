@@ -54,7 +54,7 @@ a clean `python:3.12-slim` container (`make real`; the full reports are in
 
 Plain `pytest` passes all five, because in file order each polluter runs
 after the tests it breaks. They show up as soon as the order changes
-(`pytest-randomly`, `pytest-xdist`, `-k`, a new test file). The arrow pair
+(`pytest-randomly`, `pytest-xdist`, a new test file). The arrow pair
 is [arrow-py/arrow#1038](https://github.com/arrow-py/arrow/issues/1038),
 reported in 2021 from a `pytest-randomly` failure and still open; a
 commenter there found the same pair with `pytest --find-dependencies`.
@@ -66,7 +66,6 @@ No time, time-zone, seed, timing, environment or network dependence turned
 up in any of them. These are mature suites that pin their own clocks and
 zones; a clean result is what that looks like, and it is not a proof that
 none exists.
-
 
 ## Quickstart
 
@@ -187,7 +186,7 @@ when pytest itself can't run. It takes dozens of suite runs, so it belongs
 in a nightly or weekly job rather than on every pull request:
 
 ```yaml
-- run: pip install flaky-hunt   # or: pip install git+https://github.com/ahmed-hashim-pro/flaky-hunt
+- run: pip install git+https://github.com/ahmed-hashim-pro/flaky-hunt   # not on PyPI
 - run: flaky-hunt run --json flaky.json
 - uses: actions/upload-artifact@v4
   if: always()
