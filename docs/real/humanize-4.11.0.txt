@@ -1,0 +1,8 @@
+flaky-hunt: 621 tests, 0 flaky
+39 runs of the suite and 0 of single tests in 1m 34s
+
+factors tried: order, time, timezone, random, timing, environment, network
+rates are failures in fresh processes, with 95% intervals
+wall time: 94 s on 3 workers (12 cores)
+pytest==9.1.1
+pytest-cov==7.1.0

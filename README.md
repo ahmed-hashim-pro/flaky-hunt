@@ -38,7 +38,35 @@ tests/test_tags.py::test_render_tags
 
 ![Terminal recording: plain pytest on the planted suite fails one test this time; flaky-hunt run over the order, random, timing and network factors reports six flaky tests, each with the setting that breaks it, failure rates with 95% intervals and a reproducing command; the race in test_inventory, which passed under plain pytest, then fails with the switch-interval option it suggested](docs/demo.gif)
 
-REAL_RESULTS
+## What it found in real projects
+
+Five releases of four well-known projects, each hunted with every factor in
+a clean `python:3.12-slim` container (`make real`; the full reports are in
+[`docs/real/`](docs/real)):
+
+| Project | Tests | Flaky | Cause found | Hunt took |
+| --- | ---: | ---: | --- | ---: |
+| click 8.1.7 | 555 | 0 | | 25 s |
+| python-dateutil 2.9.0.post0 | 1,527 | 0 | | 39 s |
+| humanize 4.10.0 | 572 | 25 | order: tests delete `humanize.i18n.__file__` and never put it back; 24 translation tests fail after one of them, and the second deleting test fails after the first | 3m 55s |
+| humanize 4.11.0 | 621 | 0 | upstream had since rewritten those two tests with `monkeypatch` | 1m 34s |
+| arrow 1.4.0 | 1,865 | 2 | order: `test_custom_locale_subclass` defines two `Locale` subclasses, which register themselves in arrow's global locale table for good; the two tests that validate every registered locale then fail | 15m 04s |
+
+Plain `pytest` passes all five, because in file order each polluter runs
+after the tests it breaks. They show up as soon as the order changes
+(`pytest-randomly`, `pytest-xdist`, `-k`, a new test file). The arrow pair
+is [arrow-py/arrow#1038](https://github.com/arrow-py/arrow/issues/1038),
+reported in 2021 from a `pytest-randomly` failure and still open; a
+commenter there found the same pair with `pytest --find-dependencies`.
+The humanize one was fixed upstream in 4.11.0, and its hunt comes back
+clean. So nothing here is a new bug report: one is known and open, the
+other fixed. They show the hunt finds real ones, unprompted.
+
+No time, time-zone, seed, timing, environment or network dependence turned
+up in any of them. These are mature suites that pin their own clocks and
+zones; a clean result is what that looks like, and it is not a proof that
+none exists.
+
 
 ## Quickstart
 

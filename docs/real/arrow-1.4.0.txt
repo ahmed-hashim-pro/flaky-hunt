@@ -1,0 +1,21 @@
+flaky-hunt: 1865 tests, 2 flaky (2 with a cause found)
+39 runs of the suite and 73 of single tests in 15m 04s
+
+tests/test_locales.py::TestLocaleValidation::test_locale_validation
+  order        after tests/test_locales.py::TestCustomLocale::test_custom_locale_subclass  fails 8/8  (68%–100%)
+               on its own                                                                  fails 0/8  (0%–32%)
+               AssertionError: assert 0 == 8
+  reproduce    pytest tests/test_locales.py::TestCustomLocale::test_custom_locale_subclass tests/test_locales.py::TestLocaleValidation::test_locale_validation
+
+tests/test_locales.py::TestLocaleValidation::test_locale_name_validation
+  order        after tests/test_locales.py::TestCustomLocale::test_custom_locale_subclass  fails 8/8  (68%–100%)
+               on its own                                                                  fails 0/8  (0%–32%)
+               AssertionError: assert None
+  reproduce    pytest tests/test_locales.py::TestCustomLocale::test_custom_locale_subclass tests/test_locales.py::TestLocaleValidation::test_locale_name_validation
+
+factors tried: order, time, timezone, random, timing, environment, network
+rates are failures in fresh processes, with 95% intervals
+wall time: 904 s on 3 workers (12 cores)
+pytest==9.1.1
+pytest-cov==7.1.0
+pytest-mock==3.16.0

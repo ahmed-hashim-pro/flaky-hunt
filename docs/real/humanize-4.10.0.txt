@@ -1,0 +1,28 @@
+flaky-hunt: 572 tests, 25 flaky (25 with a cause found)
+39 runs of the suite and 842 of single tests in 3m 54s
+
+24 tests fail when run after tests/test_i18n.py::TestActivate::test_default_locale_path_undefined__file__
+  tests        tests/test_i18n.py::test_i18n
+               tests/test_i18n.py::test_intcomma
+               tests/test_i18n.py::test_naturaldelta
+               tests/test_i18n.py::test_intword_plurals[es_ES-1000000-1.0 mill\xf3n]
+               tests/test_i18n.py::test_intword_plurals[es_ES-3500000-3.5 millones]
+               tests/test_i18n.py::test_intword_plurals[es_ES-1000000000-1.0 bill\xf3n]
+               … and 18 more (all in --json)
+               the same rates for each:
+  order        after tests/test_i18n.py::TestActivate::test_default_locale_path_undefined__file__  fails 8/8  (68%–100%)
+               on its own                                                                          fails 0/8  (0%–32%), skipped in 8
+               Exception: Humanize cannot determinate the default location of the 'locale' folder. You …
+  reproduce    pytest tests/test_i18n.py::TestActivate::test_default_locale_path_undefined__file__ tests/test_i18n.py::test_i18n
+
+tests/test_i18n.py::TestActivate::test_default_locale_path_undefined__file__
+  order        after tests/test_i18n.py::test_default_locale_path_undefined__file__  fails 8/8  (68%–100%)
+               on its own                                                            fails 0/8  (0%–32%)
+               AttributeError: 'module' object has no attribute '__file__'
+  reproduce    pytest tests/test_i18n.py::test_default_locale_path_undefined__file__ tests/test_i18n.py::TestActivate::test_default_locale_path_undefined__file__
+
+factors tried: order, time, timezone, random, timing, environment, network
+rates are failures in fresh processes, with 95% intervals
+wall time: 235 s on 3 workers (12 cores)
+pytest==9.1.1
+pytest-cov==7.1.0
