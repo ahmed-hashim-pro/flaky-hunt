@@ -168,9 +168,11 @@ cause found, nothing blamed on anything else, no stable test reported.
 | `test_init_cache_creates_price_file` | `mkdir()` in `TMPDIR`, never removed | environment: second run, same `TMPDIR` |
 | `test_price_index_reachable` | calls pypi.org | network |
 
-Three of these (the race, the timing budget and the receipt) pass every
-time as-is on a typical machine in UTC; they are flaky across machines,
-not across runs, which is exactly how they reach CI unnoticed.
+Two of these (the timing budget and the receipt) pass every time as-is on
+a typical machine in UTC: they are flaky across machines, not across runs,
+which is exactly how they reach CI unnoticed. The race is both: as-is it
+fails in about 1 run in 16 on an idle 4-CPU box and 1 in 6 on a loaded
+one, and every time with frequent thread switches.
 
 To show those tests can fail, `scripts/mutants.py` runs them against five
 deliberately broken versions of flaky-hunt. Every one is caught:

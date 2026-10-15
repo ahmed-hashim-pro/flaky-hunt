@@ -4,10 +4,10 @@ from shop.inventory import Inventory
 
 
 def test_parallel_reservations_use_all_stock():  # a race: lost updates
-    inv = Inventory(stock=40_000)
+    inv = Inventory(stock=120_000)
 
     def worker():
-        for _ in range(10_000):
+        for _ in range(30_000):
             inv.reserve()
 
     threads = [threading.Thread(target=worker) for _ in range(4)]

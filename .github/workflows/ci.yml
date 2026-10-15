@@ -31,8 +31,8 @@ jobs:
       - run: pip install -e '.[dev]'
       - run: pytest -q -m slow
       - run: python scripts/mutants.py
-      - name: five more whole hunts, each scored against expected.json
-        run: python scripts/reliability.py 5
+      - name: ten more whole hunts, each scored against expected.json
+        run: python scripts/reliability.py 10
       - name: the README quickstart
         working-directory: examples/planted
         run: |
