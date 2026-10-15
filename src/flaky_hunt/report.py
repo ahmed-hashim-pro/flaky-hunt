@@ -29,25 +29,22 @@ def render(report: Report, factors: list[str]) -> str:
         f"in {_duration(report.seconds)}"
     )
 
-    by_test: dict[str, list[Diagnosis]] = {}
+    # Tests that fail for the same reason (one polluter breaking 24 tests) are
+    # shown as one group; everything is still listed one by one in --json.
+    groups: dict[tuple[str, str, str], list[Diagnosis]] = {}
     for d in report.diagnoses:
-        by_test.setdefault(d.test, []).append(d)
-    for test, ds in by_test.items():
-        out.append("")
-        out.append(test)
-        for d in ds:
-            rows = _rows(d)
-            width = max(len(label) for label, _ in rows)
-            for n, (label, rate) in enumerate(rows):
-                head = d.factor if n == 0 else ""
-                lo, hi = rate.interval
-                out.append(
-                    f"  {head:<11}  {label:<{width}}  fails {rate.fails}/{rate.runs}"
-                    f"  ({lo:.0%}–{hi:.0%})"
-                )
-            if d.message:
-                out.append(f"  {'':<11}  " + textwrap.shorten(d.message, 90, placeholder=" …"))
-            out.append(f"  {'reproduce':<11}  {d.command}")
+        groups.setdefault((d.factor, d.trigger, d.culprit), []).append(d)
+    shown: set[int] = set()
+    for d in report.diagnoses:
+        if id(d) in shown:
+            continue
+        group = groups[(d.factor, d.trigger, d.culprit)]
+        if len(group) >= GROUP:
+            out += _group(group)
+            shown.update(id(g) for g in group)
+        else:
+            out += ["", d.test, *_block(d)]
+            shown.add(id(d))
 
     for test, rate in report.unexplained.items():
         out.append("")
@@ -63,6 +60,51 @@ def render(report: Report, factors: list[str]) -> str:
     out.append("factors tried: " + ", ".join(factors))
     out.append("rates are failures in fresh processes, with 95% intervals")
     return "\n".join(out)
+
+
+GROUP = 3  # this many tests failing for one reason are shown together
+LIST = 6  # and this many of them by name
+
+
+def _block(d: Diagnosis, rates_of: str = "") -> list[str]:
+    out = []
+    rows = _rows(d)
+    width = max(len(label) for label, _ in rows)
+    for n, (label, rate) in enumerate(rows):
+        head = d.factor if n == 0 else ""
+        lo, hi = rate.interval
+        line = f"  {head:<11}  {label:<{width}}  fails {rate.fails}/{rate.runs}"
+        line += f"  ({lo:.0%}–{hi:.0%})"
+        if rate.skipped:
+            line += f", skipped in {rate.skipped}"
+        out.append(line)
+    if d.message:
+        out.append(f"  {'':<11}  " + textwrap.shorten(d.message, 90, placeholder=" …"))
+    out.append(f"  {'reproduce':<11}  {d.command}")
+    return out
+
+
+def _group(group: list[Diagnosis]) -> list[str]:
+    first = group[0]
+    what = (
+        f"fail when run after {first.culprit}"
+        if first.factor == "order" and first.trigger.startswith("run after")
+        else f"fail under: {first.trigger}"
+    )
+    out = ["", f"{len(group)} tests {what}"]
+    out += [f"  {'tests' if n == 0 else '':<11}  {g.test}" for n, g in enumerate(group[:LIST])]
+    if len(group) > LIST:
+        out.append(f"  {'':<11}  … and {len(group) - LIST} more (all in --json)")
+    same = all(
+        (g.failing.fails, g.passing.fails) == (first.failing.fails, first.passing.fails)
+        for g in group
+    )
+    out.append(
+        f"  {'':<11}  "
+        + ("the same rates for each:" if same else "rates for the first (they differ; see --json):")
+    )
+    out += _block(first)
+    return out
 
 
 def _rows(d: Diagnosis) -> list[tuple[str, Rate]]:

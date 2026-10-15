@@ -31,6 +31,7 @@ from .stats import fisher_greater, wilson
 class Rate:
     fails: int
     runs: int
+    skipped: int = 0  # runs where the test was skipped (they count as not failing)
 
     @property
     def interval(self) -> tuple[float, float]:
@@ -205,13 +206,15 @@ class Hunt:
     def _rate(self, t: str, s: Setting, prefix: tuple[str, ...] = ()) -> tuple[Rate, str]:
         key = (t if not prefix else " ".join(prefix + (t,)), s)
         if key not in self._alone:
-            fails, message = 0, ""
+            fails, skipped, message = 0, 0, ""
             for _ in range(self.n):
                 o = self.runner.run(s, nodeids=[*prefix, t]).get(t)
                 if o is not None and o.failed:
                     fails += 1
                     message = message or o.message
-            self._alone[key] = (Rate(fails, self.n), message)
+                elif o is not None and o.outcome == "skipped":
+                    skipped += 1
+            self._alone[key] = (Rate(fails, self.n, skipped), message)
         return self._alone[key]
 
     def _confirm(
