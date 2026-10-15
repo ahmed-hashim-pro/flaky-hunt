@@ -64,3 +64,52 @@ def test_needs_setter_fails_alone_but_is_not_called_always_failing():
     r = hunt(["order", "network"])
     assert "t::needs_setter" not in r.always_fail
     assert set(r.flaky()) == {"t::needs_setter", "t::victim"}
+
+
+class NoisyRace:
+    """t::race always fails with frequent thread switches, and also fails as-is
+    in 3 of every 8 runs, like the planted race on a busy CI runner."""
+
+    def __init__(self):
+        self.suite_runs = self.single_runs = 0
+        self.seconds = 0.0
+        self.as_is = 0
+        self.lock = __import__("threading").Lock()
+
+    def collect(self):
+        return ["t::race", "t::fine"]
+
+    def run(self, setting: Setting, nodeids=None, order=None):
+        with self.lock:
+            if nodeids is None:
+                self.suite_runs += 1
+            else:
+                self.single_runs += 1
+            switch = setting.knob == "switch"
+            if not switch and setting.factor == "control":
+                self.as_is += 1
+                natural = self.as_is % 8 in (1, 4, 7)
+            else:
+                natural = False
+        failed = switch or natural
+        out = {"t::race": Outcome("failed" if failed else "passed", "lost updates")}
+        out["t::fine"] = Outcome("passed")
+        return out
+
+
+def hunt_race(confirm_max):
+    probes = [p for p in default_probes({}) if p.knob == "switch"]
+    return Hunt(NoisyRace(), probes, confirm=8, confirm_max=confirm_max, workers=1).run()
+
+
+def test_one_stage_of_eight_misses_a_race_that_also_fails_as_is():
+    r = hunt_race(confirm_max=8)
+    assert r.diagnoses == [] and "t::race" in r.unexplained
+
+
+def test_second_stage_confirms_it():
+    r = hunt_race(confirm_max=32)
+    [d] = r.diagnoses
+    assert (d.test, d.factor) == ("t::race", "timing")
+    assert (d.failing.fails, d.failing.runs) == (32, 32)
+    assert d.passing.runs == 32 and 8 <= d.passing.fails <= 16

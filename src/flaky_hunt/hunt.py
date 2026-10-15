@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import threading
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
@@ -76,6 +77,8 @@ class Report:
 
 Progress = Callable[[str], None]
 
+PROMISING = 0.25  # a first-stage p below this earns a second, larger stage
+
 
 class Hunt:
     def __init__(
@@ -83,6 +86,7 @@ class Hunt:
         runner: Runner,
         probes: list[Setting],
         confirm: int = 8,
+        confirm_max: int = 32,
         alpha: float = 0.01,
         workers: int = 4,
         isolated_max: int = 200,
@@ -91,11 +95,15 @@ class Hunt:
         self.runner = runner
         self.probes = probes
         self.n = confirm
+        self.n_max = max(confirm, confirm_max)
         self.alpha = alpha
         self.workers = max(1, workers)
         self.isolated_max = isolated_max
         self.say = progress or (lambda s: None)
-        self._alone: dict[tuple[str, Setting], tuple[Rate, str]] = {}
+        self._runs: dict[tuple[str, Setting], list[Outcome | None]] = {}
+        self._locks: dict[tuple[str, Setting], threading.Lock] = {}
+        self._locks_lock = threading.Lock()
+        self._tries: dict[str, int] = {}  # causes tried per test, for the correction
 
     # ------------------------------------------------------------ driver
 
@@ -128,7 +136,9 @@ class Hunt:
             if all(o.failed for o in seen) and (t not in isolated or isolated[t].failed):
                 report.always_fail.append(t)
                 continue
-            suspects += self._suspects(t, ids, ctrl, probes, isolated.get(t))
+            mine = self._suspects(t, ids, ctrl, probes, isolated.get(t))
+            self._tries[t] = len(mine)
+            suspects += mine
 
         self.say(f"confirming {len(suspects)} suspects, {self.n} runs a side")
         found = [d for d in self._map(lambda f: f(), suspects) if d is not None]
@@ -203,19 +213,53 @@ class Hunt:
 
     # ------------------------------------------------------------ confirming
 
-    def _rate(self, t: str, s: Setting, prefix: tuple[str, ...] = ()) -> tuple[Rate, str]:
-        key = (t if not prefix else " ".join(prefix + (t,)), s)
-        if key not in self._alone:
-            fails, skipped, message = 0, 0, ""
-            for _ in range(self.n):
-                o = self.runner.run(s, nodeids=[*prefix, t]).get(t)
-                if o is not None and o.failed:
-                    fails += 1
-                    message = message or o.message
-                elif o is not None and o.outcome == "skipped":
-                    skipped += 1
-            self._alone[key] = (Rate(fails, self.n, skipped), message)
-        return self._alone[key]
+    def _rate(
+        self, t: str, s: Setting, prefix: tuple[str, ...] = (), n: int | None = None
+    ) -> tuple[Rate, str]:
+        """The first n runs of `t` (after `prefix`) under `s`, in fresh processes."""
+        n = n or self.n
+        key = (" ".join(prefix + (t,)), s)
+        with self._locks_lock:
+            lock = self._locks.setdefault(key, threading.Lock())
+        with lock:
+            runs = self._runs.setdefault(key, [])
+            while len(runs) < n:
+                runs.append(self.runner.run(s, nodeids=[*prefix, t]).get(t))
+            runs = runs[:n]
+        fails = [o for o in runs if o is not None and o.failed]
+        skipped = sum(o is not None and o.outcome == "skipped" for o in runs)
+        return Rate(len(fails), n, skipped), (fails[0].message if fails else "")
+
+    def _compare(
+        self,
+        t: str,
+        worse: tuple[Setting, tuple[str, ...]],
+        better: tuple[Setting, tuple[str, ...]],
+    ) -> tuple[Rate, Rate, float, str] | None:
+        """Does `t` fail significantly more often under `worse` than under `better`?
+
+        Two stages: n runs a side, then, if that was inconclusive but leaning
+        that way (p < 0.25), up to n_max a side. The second stage is for tests
+        that also fail now and then as-is (a race on a busy machine): 8 of 8
+        against 3 of 8 isn't conclusive, 32 of 32 against 10 of 32 is.
+
+        alpha is split over both stages and over every cause tried for this
+        test (Bonferroni), so for each test the chance of confirming any cause
+        that isn't there stays within alpha. That matters for a test that
+        fails at random: it is a suspect under almost every knob, and a dozen
+        tests at alpha each would sooner or later blame one by chance.
+        """
+        stages = [self.n] if self.n_max == self.n else [self.n, self.n_max]
+        level = self.alpha / (len(stages) * max(1, self._tries.get(t, 1)))
+        for n in stages:
+            bad, message = self._rate(t, *worse, n=n)
+            good, _ = self._rate(t, *better, n=n)
+            p = fisher_greater(bad.fails, bad.runs, good.fails, good.runs)
+            if p < level:
+                return bad, good, p, message
+            if p >= PROMISING:
+                return None
+        return None
 
     def _confirm(
         self, t: str, factor: str, s_fail: Setting, s_pass: Setting, message: str
@@ -224,12 +268,11 @@ class Hunt:
             bad, good = Rate(1, 1), Rate(0, 1)
             p = 0.0
         else:
-            bad, m = self._rate(t, s_fail)
-            good, _ = self._rate(t, s_pass)
-            message = m or message
-            p = fisher_greater(bad.fails, bad.runs, good.fails, good.runs)
-            if p >= self.alpha:
+            found = self._compare(t, (s_fail, ()), (s_pass, ()))
+            if found is None:
                 return None
+            bad, good, p, m = found
+            message = m or message
         d = Diagnosis(
             t, factor, s_fail.label, s_pass.label, bad, good, p, s_fail.command([t]), message
         )
@@ -246,19 +289,19 @@ class Hunt:
 
     def _polluter(self, t: str, order: list[str], message: str) -> Diagnosis | None:
         before = order[: order.index(t)]
-        alone, _ = self._rate(t, CONTROL)
-        if alone.fails:
-            return None
         if mutants.active("blame-last"):
             culprit = before[-1] if before else None
         else:
             culprit = narrow(before, self._oracle(t, want_fail=True))
         if culprit is None:
             return None
-        bad, m = self._rate(t, CONTROL, (culprit,))
-        p = fisher_greater(bad.fails, bad.runs, alone.fails, alone.runs)
-        if p >= self.alpha and not mutants.active("blame-last"):
-            return None
+        found = self._compare(t, (CONTROL, (culprit,)), (CONTROL, ()))
+        if found is None:
+            if not mutants.active("blame-last"):
+                return None
+            # The mutant reports its culprit whatever the numbers say.
+            found = (self._rate(t, CONTROL, (culprit,))[0], self._rate(t, CONTROL)[0], 1.0, "")
+        bad, alone, p, m = found
         return Diagnosis(
             t,
             "order",
@@ -274,14 +317,13 @@ class Hunt:
 
     def _needs(self, t: str, ids: list[str], message: str) -> Diagnosis | None:
         before = ids[: ids.index(t)]
-        alone, m = self._rate(t, CONTROL)
         culprit = narrow(before, self._oracle(t, want_fail=False))
         if culprit is None:
             return None
-        paired, _ = self._rate(t, CONTROL, (culprit,))
-        p = fisher_greater(alone.fails, alone.runs, paired.fails, paired.runs)
-        if p >= self.alpha:
+        found = self._compare(t, (CONTROL, ()), (CONTROL, (culprit,)))
+        if found is None:
             return None
+        alone, paired, p, m = found
         return Diagnosis(
             t,
             "order",

@@ -40,6 +40,13 @@ def main(argv: list[str] | None = None) -> int:
         help="fresh-process runs on each side when confirming a cause (default 8)",
     )
     run.add_argument(
+        "--confirm-max",
+        type=int,
+        default=32,
+        metavar="N",
+        help="runs a side when the first N are inconclusive (default 32)",
+    )
+    run.add_argument(
         "--alpha",
         type=float,
         default=0.01,
@@ -95,6 +102,7 @@ def main(argv: list[str] | None = None) -> int:
         runner,
         probes,
         confirm=args.confirm,
+        confirm_max=args.confirm_max,
         alpha=args.alpha,
         workers=args.workers,
         isolated_max=args.isolated_max,

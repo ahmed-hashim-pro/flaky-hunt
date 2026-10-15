@@ -107,10 +107,21 @@ self-tests against deliberately broken versions of flaky-hunt, and
 3. **Confirm.** Run the test on its own, in 8 fresh processes under the
    failing setting and 8 under the passing one. The knob is reported only
    if the failing side fails significantly more often (one-sided Fisher
-   exact test, p < 0.01). This step is what stops a test that fails at
-   random from being blamed on whichever setting it happened to fail under:
-   the hash-order test above fails under half of all settings, but only
-   `PYTHONHASHSEED` survives confirmation.
+   exact test). This is what stops a test that fails at random from being
+   blamed on whichever setting it happened to fail under: the hash-order
+   test above fails under half of all settings, but only `PYTHONHASHSEED`
+   survives.
+   - If 8 a side is inconclusive but leaning that way (p < 0.25), both
+     sides go to 32 runs. That is for tests that also fail now and then
+     as-is: on a busy machine the planted race fails as-is in up to a fifth
+     of runs, and 8 of 8 against 3 of 8 proves nothing, while 32 of 32
+     against 10 of 32 does.
+   - The 1% significance level is split over the two stages and over every
+     cause tried for that test (Bonferroni), so for each test the chance of
+     blaming any cause that isn't there stays under 1%. A test that fails at
+     random is a suspect under nearly every knob; without the split, one of
+     a dozen comparisons would now and then come out "significant" by
+     chance.
 4. **Order.** A test that fails in some order but passes on its own is
    bisected over the tests that ran before it, down to the one that breaks
    it, and the pair is confirmed the same way. A test that fails on its own
@@ -118,7 +129,8 @@ self-tests against deliberately broken versions of flaky-hunt, and
 
 Rates are failures out of runs, with Wilson 95% intervals. 8 of 8 means
 "at least 68%", not "always", and 0 of 8 means "at most 32%", not "never".
-Raise `--confirm` for tighter intervals.
+Raise `--confirm` (first stage) or `--confirm-max` (second) for tighter
+intervals.
 
 ## The factors
 
