@@ -1,5 +1,5 @@
 # Terminal demo for the README. Regenerate with:  make gif
-# Records the real CLI on the planted suite. The hunt takes about a minute;
+# Records the real CLI on the planted suite. The hunt takes about a minute and a half;
 # the recording skips the wait between the progress lines and the report.
 
 Output docs/demo.gif
@@ -24,7 +24,7 @@ Type "flaky-hunt run --factors order,random,timing,network"
 Enter
 Sleep 4s
 Hide
-Sleep 150s
+Sleep 120s
 Show
 Sleep 9s
 Type "pytest -q --fh-switch-interval=1e-6 tests/test_inventory.py | tail -2"

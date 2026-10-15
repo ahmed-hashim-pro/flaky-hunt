@@ -36,7 +36,7 @@ tests/test_tags.py::test_render_tags
 ...
 ```
 
-![Terminal recording: the planted suite passes under plain pytest; flaky-hunt run over the order, random, timing and network factors reports six flaky tests, each with the setting that breaks it, failure rates with 95% intervals and a reproducing command; the race in test_inventory then fails under plain pytest with the switch-interval option it suggested](docs/demo.gif)
+![Terminal recording: plain pytest on the planted suite fails one test this time; flaky-hunt run over the order, random, timing and network factors reports six flaky tests, each with the setting that breaks it, failure rates with 95% intervals and a reproducing command; the race in test_inventory, which passed under plain pytest, then fails with the switch-interval option it suggested](docs/demo.gif)
 
 REAL_RESULTS
 

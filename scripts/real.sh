@@ -7,7 +7,7 @@ mkdir -p docs/real
 WORKERS=${WORKERS:-3}
 
 hunt() {  # name repo tag install-command [test paths]
-  local name=$1 repo=$2 tag=$3 install=$4 paths=${5:-}
+  local name=$1-$3 repo=$2 tag=$3 install=$4 paths=${5:-}
   echo "== $name $tag" >&2
   docker run --rm -e WORKERS -v "$PWD":/fh:ro -v "$PWD/docs/real":/out python:3.12-slim bash -c "
     set -e
@@ -20,7 +20,8 @@ hunt() {  # name repo tag install-command [test paths]
     start=\$(date +%s)
     flaky-hunt run --workers $WORKERS --json /out/$name.json $paths > /out/$name.txt || true
     echo \"wall time: \$(( \$(date +%s) - start )) s on $WORKERS workers ($(nproc) cores)\" >> /out/$name.txt
-    pip freeze | grep -iE '^(pytest|$name)' >> /out/$name.txt || true
+    pip freeze | grep -iE '^(pytest|$1)' >> /out/$name.txt || true
+    chown $(id -u):$(id -g) /out/$name.txt /out/$name.json
   "
   tail -n 4 "docs/real/$name.txt" >&2
 }
@@ -28,6 +29,8 @@ hunt() {  # name repo tag install-command [test paths]
 hunt click https://github.com/pallets/click 8.1.7 "pip install -q -e . pytest"
 hunt python-dateutil https://github.com/dateutil/dateutil 2.9.0.post0 \
   "pip install -q -e . pytest freezegun hypothesis"
+# 4.10.0 has a test-pollution bug that upstream fixed in 4.11.0: run both.
 hunt humanize https://github.com/python-humanize/humanize 4.10.0 "pip install -q -e .[tests]"
-hunt arrow https://github.com/arrow-py/arrow 1.3.0 \
+hunt humanize https://github.com/python-humanize/humanize 4.11.0 "pip install -q -e .[tests]"
+hunt arrow https://github.com/arrow-py/arrow 1.4.0 \
   "pip install -q -e . -r requirements/requirements-tests.txt"
